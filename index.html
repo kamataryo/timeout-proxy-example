@@ -27,7 +27,7 @@
        */
       const $TIMEOUT = Symbol('timeout tag')
 
-      return new Proxy(target, {
+      const proxyee = new Proxy(target, {
         /**
          * apply handler
          * @param  {function}  target       ターゲット
@@ -36,46 +36,44 @@
          * @return {any}                    元の関数の戻り値
          */
         apply: (target, thisArg, argumentList) => {
-          const called = (target[$TIMEOUT] || {})[opts.timeout]
+          const called = proxyee[$TIMEOUT]
 
           if (!called) {
             // 初めて関数が呼ばれた
             const timerId = setTimeout(() => {
               clearTimeout(timerId)
-              opts.callback(target[$TIMEOUT][opts.timeout].count, opts.timeout, target)
-              target[$TIMEOUT] = void 0
+              opts.callback(proxyee[$TIMEOUT].count, opts.timeout, target)
+              proxyee[$TIMEOUT] = void 0
             }, opts.timeout)
 
-            // タイムアウトのミリ秒が違えば、別なタイムアウト設定だろう
-            // ミリ秒をキーとして個別に設定を保存する
-            target[$TIMEOUT] = {
-              [opts.timeout]: {
-                called: true,
-                count: 0,
-                timerId,
-              }
+            proxyee[$TIMEOUT] = {
+              called: true,
+              count: 0,
+              timerId,
             }
           } else {
             // 2回目以降に関数が呼ばれた
             const {
               timerId
-            } = target[$TIMEOUT][opts.timeout]
+            } = proxyee[$TIMEOUT]
             clearTimeout(timerId)
 
-            target[$TIMEOUT][opts.timeout].timerId = setTimeout(() => {
+            proxyee[$TIMEOUT].timerId = setTimeout(() => {
               clearTimeout(timerId)
               const {
                 count
-              } = target[$TIMEOUT][opts.timeout]
+              } = proxyee[$TIMEOUT]
               opts.callback(count, opts.timeout, target)
-              target[$TIMEOUT][opts.timeout] = void 0
+              proxyee[$TIMEOUT] = void 0
             }, opts.timeout)
           }
 
-          target[$TIMEOUT][opts.timeout].count++
+          proxyee[$TIMEOUT].count++
             return target(argumentList)
         },
       })
+
+      return proxyee
     }
 
     const result = document.getElementById('result')
