@@ -20,6 +20,7 @@
      * @return {function}                                     プロキシされた関数
      */
     const timeoutProxy = (target, opts) => {
+
       /**
        * タイムアウトに関する情報を元の関数に埋め込む
        * @type {symbol}
@@ -35,39 +36,43 @@
          * @return {any}                    元の関数の戻り値
          */
         apply: (target, thisArg, argumentList) => {
-          const called = target[$TIMEOUT]
+          const called = (target[$TIMEOUT] || {})[opts.timeout]
 
           if (!called) {
             // 初めて関数が呼ばれた
             const timerId = setTimeout(() => {
               clearTimeout(timerId)
-              opts.callback(target[$TIMEOUT].count, opts.timeout, target)
+              opts.callback(target[$TIMEOUT][opts.timeout].count, opts.timeout, target)
               target[$TIMEOUT] = void 0
             }, opts.timeout)
 
+            // タイムアウトのミリ秒が違えば、別なタイムアウト設定だろう
+            // ミリ秒をキーとして個別に設定を保存する
             target[$TIMEOUT] = {
-              called: true,
-              count: 0,
-              timerId,
+              [opts.timeout]: {
+                called: true,
+                count: 0,
+                timerId,
+              }
             }
           } else {
             // 2回目以降に関数が呼ばれた
             const {
               timerId
-            } = target[$TIMEOUT]
+            } = target[$TIMEOUT][opts.timeout]
             clearTimeout(timerId)
 
-            target[$TIMEOUT].timerId = setTimeout(() => {
+            target[$TIMEOUT][opts.timeout].timerId = setTimeout(() => {
               clearTimeout(timerId)
               const {
                 count
-              } = target[$TIMEOUT]
+              } = target[$TIMEOUT][opts.timeout]
               opts.callback(count, opts.timeout, target)
-              target[$TIMEOUT] = void 0
+              target[$TIMEOUT][opts.timeout] = void 0
             }, opts.timeout)
           }
 
-          target[$TIMEOUT].count++
+          target[$TIMEOUT][opts.timeout].count++
             return target(argumentList)
         },
       })
@@ -116,6 +121,7 @@
       await promisifiedSetTimeout(timeoutFunc, 480)
       await promisifiedSetTimeout(timeoutFunc, 490)
       await promisifiedSetTimeout(timeoutFunc, 495)
+      await promisifiedSetTimeout(timeoutFunc, 700)
     }
 
     main()
