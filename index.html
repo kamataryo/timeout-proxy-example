@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Document</title>
+</head>
+
+<body>
+  <p id="result"></p>
+  <script>
+    /**
+     * タイムアウト機能を埋め込むプロキシ
+     * targetが一定時間呼ばれなかったら固有の処理を実行する
+     * タイムアウトすると、呼ばれた回数のカウンタはリセットされる
+     * @param  {function}                              target プロキシされる関数
+     * @param  {{timeout: number, callback: function}} opts   オプション
+     * @return {function}                                     プロキシされた関数
+     */
+    const timeoutProxy = (target, opts) => {
+      /**
+       * タイムアウトに関する情報を元の関数に埋め込む
+       * @type {symbol}
+       */
+      const $TIMEOUT = Symbol('timeout tag')
+
+      return new Proxy(target, {
+        /**
+         * apply handler
+         * @param  {function}  target       ターゲット
+         * @param  {any}       thisArg      コンテキスト
+         * @param  {array}     argumentList 引数
+         * @return {any}                    元の関数の戻り値
+         */
+        apply: (target, thisArg, argumentList) => {
+          const called = target[$TIMEOUT]
+
+          if (!called) {
+            // 初めて関数が呼ばれた
+            const timerId = setTimeout(() => {
+              clearTimeout(timerId)
+              opts.callback(target[$TIMEOUT].count, opts.timeout, target)
+              target[$TIMEOUT] = void 0
+            }, opts.timeout)
+
+            target[$TIMEOUT] = {
+              called: true,
+              count: 0,
+              timerId,
+            }
+          } else {
+            // 2回目以降に関数が呼ばれた
+            const {
+              timerId
+            } = target[$TIMEOUT]
+            clearTimeout(timerId)
+
+            target[$TIMEOUT].timerId = setTimeout(() => {
+              clearTimeout(timerId)
+              const {
+                count
+              } = target[$TIMEOUT]
+              opts.callback(count, opts.timeout, target)
+              target[$TIMEOUT] = void 0
+            }, opts.timeout)
+          }
+
+          target[$TIMEOUT].count++
+            return target(argumentList)
+        },
+      })
+    }
+
+    const result = document.getElementById('result')
+
+    // サンプルの関数
+    const sample = () => {
+      result.innerText += 'called\n'
+    }
+
+    const opts = {
+      timeout: 500,
+      callback: (count, timeout, target) =>
+        result.innerText +=
+        `タイムアウト(${timeout}ミリ秒)するまでに ${count} 回 ${
+          target.name
+        } が呼ばれました\n`
+
+    }
+
+    // プロキシを使って振る舞いを改ざんした新しい関数を作る
+    const timeoutFunc = timeoutProxy(sample, opts)
+
+    const promisifiedSetTimeout = (func, timeout) => {
+      return new Promise((resolve, reject) => {
+        result.innerText += (`${timeout}ミリ秒待って関数を実行:`)
+        setTimeout(() => {
+          let result
+          try {
+            result = func()
+          } catch (e) {
+            reject(e)
+          }
+          resolve(result)
+        }, timeout)
+      })
+    }
+
+
+    const main = async () => {
+      await promisifiedSetTimeout(timeoutFunc, 200)
+      await promisifiedSetTimeout(timeoutFunc, 400)
+      await promisifiedSetTimeout(timeoutFunc, 450)
+      await promisifiedSetTimeout(timeoutFunc, 480)
+      await promisifiedSetTimeout(timeoutFunc, 490)
+      await promisifiedSetTimeout(timeoutFunc, 495)
+    }
+
+    main()
+  </script>
+
+</body>
+
+</html>
